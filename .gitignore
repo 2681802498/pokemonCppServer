@@ -1,0 +1,37 @@
+# Build directories
+build/
+cmake-build-debug/
+cmake-build-release/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Generated files
+*.pb.cc
+*.pb.h
+*.pb.cpp
+*.grpc.pb.cc
+*.grpc.pb.h
+*.grpc.pb.cpp
+
+# Executables
+/bin/
+*.o
+*.so
+*.a
+pokemon_server
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+
+# Artifacts
+*.log

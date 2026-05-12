@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pokemon-server-config
+data:
+  # 确保这个名字能 ping 通 kubectl get svc redis-service
+  redis_url: redis-service:6379
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pokemon-server
+  labels:
+    app: pokemon-server
+spec:
+  replicas: 2
+  serviceName: pokemon-server-headless
+  selector:
+    matchLabels:
+      app: pokemon-server
+  template:
+    metadata:
+      labels:
+        app: pokemon-server
+    spec:
+      containers:
+      - name: pokemon-server
+        image: why5899/pokemon-worker:v0.8.3
+        imagePullPolicy: Always 
+        ports:
+        - containerPort: 50051
+          name: grpc
+        - containerPort: 9102
+          name: metrics
+        env:
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: pokemon-server-config
+              key: redis_url
+        livenessProbe:
+          # 修改点 2：建议使用 tcpSocket 探测 50051 端口，比 ps aux 更可靠
+          tcpSocket:
+            port: 50051
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 50051
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pokemon-server-headless
+  labels:
+    app: pokemon-server
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9102"
+    prometheus.io/path: "/metrics"
+spec:
+  clusterIP: None
+  selector:
+    app: pokemon-server
+  ports:
+  - port: 50051
+    targetPort: 50051
+    protocol: TCP
+    name: grpc
+  - port: 9102
+    targetPort: 9102
+    protocol: TCP
+    name: metrics

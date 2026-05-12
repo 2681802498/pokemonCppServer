@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: custom-metrics-config
+  namespace: monitoring
+data:
+  config.yaml: |
+    rules:
+      default: false
+      custom:
+      - seriesQuery: 'pokemon_room_utilization'
+        resources:
+          overrides:
+            namespace: {resource: "namespace"}
+            pod: {resource: "pod"}
+        name:
+          matches: "pokemon_room_utilization"
+          as: "pokemon_room_utilization"
+        metricsQuery: 'avg(pokemon_room_utilization{<<.LabelMatchers>>}) by (<<.GroupBy>>)'

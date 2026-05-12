@@ -1,0 +1,52 @@
+syntax = "proto3";
+package calc;
+option go_package = "./api/calc";
+
+service Calculator {
+    // 1. 初始化房间（让 C++ 开启一个线程/对象循环）
+    rpc CreateRoom (CreateRoomRequest) returns (CommonResponse) {}
+    
+    // 2. 发送玩家指令（非阻塞投递到 C++ 队列）
+    rpc SendCommand (GameCommand) returns (CommonResponse) {}
+
+    rpc DestroyRoom (DestroyRoomRequest) returns (DestroyRoomResponse);
+    // 3. (后续) 双向流用于同步状态更新
+    // rpc GameStream (stream ClientMsg) returns (stream ServerMsg) {}
+    rpc GetHeartbeat (HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+message CreateRoomRequest {
+    string room_id = 1;
+    string init_json = 2; // BattleSession::createFromJson 所需初始化数据
+}
+
+message GameCommand {
+    string room_id = 1;
+    string player_id = 2;
+    string action = 3; // 比如 "move", "skill"
+}
+
+message CommonResponse {
+    int32 code = 1;
+    string message = 2;
+}
+
+message DestroyRoomRequest {
+    string room_id = 1;
+}
+
+message DestroyRoomResponse {
+    int32 code = 1;
+    string message = 2;
+}
+
+message HeartbeatRequest {}
+
+message HeartbeatResponse {
+    int32 code = 1;
+    int32 active_rooms = 2;    // 当前正在运行的房间数
+    float cpu_usage = 3;       // 节点的 CPU 占用率
+    uint64 memory_used = 4;    // 已用内存 (MB)
+    int32 max_capacity = 5;    // 节点最大承载量 (建议值)
+    string server_id = 6;      // C++ 实例唯一 ID（用于检测重启）
+}
