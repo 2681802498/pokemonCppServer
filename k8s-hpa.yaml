@@ -13,7 +13,7 @@ spec:
   - type: Pods
     pods:
       metric:
-        name: pokemon_room_utilization
+        name: pokemon_room_utilization_global
       target:
         type: AverageValue
         averageValue: "0.5"

@@ -6,14 +6,21 @@ metadata:
 data:
   config.yaml: |
     rules:
-      default: false
-      custom:
-      - seriesQuery: 'pokemon_room_utilization'
-        resources:
-          overrides:
-            namespace: {resource: "namespace"}
-            pod: {resource: "pod"}
-        name:
-          matches: "pokemon_room_utilization"
-          as: "pokemon_room_utilization"
-        metricsQuery: 'avg(pokemon_room_utilization{<<.LabelMatchers>>}) by (<<.GroupBy>>)'
+    - seriesQuery: 'pokemon_room_utilization_global'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "pokemon_room_utilization_global"
+        as: "pokemon_room_utilization_global"
+      metricsQuery: 'avg(pokemon_room_utilization_global{<<.LabelMatchers>>}) by (<<.GroupBy>>)'
+    - seriesQuery: 'pokemon_room_utilization_min'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "pokemon_room_utilization_min"
+        as: "pokemon_room_utilization_min"
+      metricsQuery: 'avg(pokemon_room_utilization_min{<<.LabelMatchers>>}) by (<<.GroupBy>>)'

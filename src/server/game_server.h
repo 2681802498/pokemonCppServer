@@ -17,7 +17,8 @@ namespace pokemon_game
     public:
         GameServiceImpl(std::shared_ptr<RoomManager> room_manager,
                         std::shared_ptr<RedisClient> redis_client,
-                        const std::string &server_id);
+                        const std::string &server_id,
+                        const std::string &pod_ip);
 
         grpc::Status CreateRoom(grpc::ServerContext *context,
                                 const calc::CreateRoomRequest *request,
@@ -39,6 +40,7 @@ namespace pokemon_game
         std::shared_ptr<RoomManager> room_manager_;
         std::shared_ptr<RedisClient> redis_client_;
         std::string server_id_;
+        std::string pod_ip_;
     };
 
     class GameServer
@@ -81,6 +83,8 @@ namespace pokemon_game
         int metrics_port_;
         std::atomic<bool> metrics_running_;
         std::thread metrics_thread_;
+        std::atomic<bool> heartbeat_running_;
+        std::thread heartbeat_thread_;
 
         std::string GenerateServerId();
 

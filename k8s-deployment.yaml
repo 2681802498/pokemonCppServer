@@ -26,8 +26,8 @@ spec:
     spec:
       containers:
       - name: pokemon-server
-        image: why5899/pokemon-worker:v0.8.3
-        imagePullPolicy: Always 
+        image: why5899/pokemon-worker:v0.9.0
+        imagePullPolicy: Always
         ports:
         - containerPort: 50051
           name: grpc
