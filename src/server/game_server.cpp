@@ -7,6 +7,8 @@
 #include <unistd.h>
 #include <random>
 #include <chrono>
+#include <algorithm>
+#include <unordered_map>
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
@@ -34,8 +36,9 @@ namespace pokemon_game
 
     GameServiceImpl::GameServiceImpl(std::shared_ptr<RoomManager> room_manager,
                                      std::shared_ptr<RedisClient> redis_client,
-                                     const std::string &server_id)
-        : room_manager_(room_manager), redis_client_(redis_client), server_id_(server_id) {}
+                                     const std::string &server_id,
+                                     const std::string &pod_ip)
+        : room_manager_(room_manager), redis_client_(redis_client), server_id_(server_id), pod_ip_(pod_ip) {}
 
     grpc::Status GameServiceImpl::CreateRoom(grpc::ServerContext *context,
                                              const calc::CreateRoomRequest *request,
@@ -221,6 +224,7 @@ namespace pokemon_game
 
         int active_rooms = room_manager_->GetRoomCount();
         int max_rooms = room_manager_->GetMaxRooms();
+        redis_client_->TouchNodeHeartbeat(pod_ip_);
         response->set_code(0);
         response->set_active_rooms(active_rooms);
         response->set_cpu_usage(0.0f); // TODO: Implement actual CPU usage detection
@@ -249,7 +253,7 @@ namespace pokemon_game
     }
 
     GameServer::GameServer(const std::string &pod_ip, const std::string &redis_url)
-        : pod_ip_(pod_ip), redis_url_(redis_url), grpc_port_(50051), metrics_port_(9102), metrics_running_(false)
+        : pod_ip_(pod_ip), redis_url_(redis_url), grpc_port_(50051), metrics_port_(9102), metrics_running_(false), heartbeat_running_(false)
     {
         server_id_ = GenerateServerId();
         room_manager_ = std::make_shared<RoomManager>(10); // Max 10 rooms
@@ -296,6 +300,9 @@ namespace pokemon_game
             return false;
         }
 
+        // Clean up any leftover rooms for this pod (in case of previous crash)
+        redis_client_->DeleteRoomsForServer(pod_ip_);
+
         // Register this node in Redis
         if (!redis_client_->RegisterNode(pod_ip_))
         {
@@ -304,7 +311,7 @@ namespace pokemon_game
         }
 
         // Create gRPC service with server_id
-        service_ = std::make_unique<GameServiceImpl>(room_manager_, redis_client_, server_id_);
+        service_ = std::make_unique<GameServiceImpl>(room_manager_, redis_client_, server_id_, pod_ip_);
         std::cout << "GameServer initialized with server_id: " << server_id_ << std::endl;
 
         // Build and start gRPC server
@@ -328,11 +335,29 @@ namespace pokemon_game
             std::cerr << "Failed to start metrics server on port " << metrics_port_ << std::endl;
         }
 
+        // Start heartbeat refresh thread to prevent expiration
+        heartbeat_running_ = true;
+        heartbeat_thread_ = std::thread([this]()
+                                        {
+            while (heartbeat_running_)
+            {
+                std::this_thread::sleep_for(std::chrono::seconds(60));
+                if (redis_client_ && redis_client_->IsConnected())
+                {
+                    redis_client_->TouchNodeHeartbeat(pod_ip_, 300);
+                }
+            } });
+
         return true;
     }
 
     void GameServer::Stop()
     {
+        heartbeat_running_ = false;
+        if (heartbeat_thread_.joinable())
+        {
+            heartbeat_thread_.join();
+        }
         StopMetricsServer();
         if (server_)
         {
@@ -390,24 +415,93 @@ namespace pokemon_game
         std::cout << "Graceful shutdown completed" << std::endl;
     }
 
-    static std::string BuildMetricsBody(int active_rooms, int max_rooms)
+    struct MetricsSnapshot
     {
-        double utilization = 0.0;
-        if (max_rooms > 0)
+        int local_active_rooms = 0;
+        int local_max_rooms = 0;
+        int global_active_rooms = 0;
+        int global_capacity = 0;
+        double local_utilization = 0.0;
+        double global_utilization = 0.0;
+        double min_utilization = 0.0;
+    };
+
+    static MetricsSnapshot CollectMetricsSnapshot(const std::shared_ptr<RoomManager> &room_manager,
+                                                  const std::shared_ptr<RedisClient> &redis_client,
+                                                  const std::string &pod_ip)
+    {
+        MetricsSnapshot snapshot;
+        snapshot.local_active_rooms = room_manager->GetRoomCount();
+        snapshot.local_max_rooms = room_manager->GetMaxRooms();
+
+        if (redis_client && redis_client->IsConnected())
         {
-            utilization = static_cast<double>(active_rooms) / static_cast<double>(max_rooms);
+            redis_client->TouchNodeHeartbeat(pod_ip);
         }
 
+        if (snapshot.local_max_rooms > 0)
+        {
+            snapshot.local_utilization = static_cast<double>(snapshot.local_active_rooms) /
+                                         static_cast<double>(snapshot.local_max_rooms);
+        }
+
+        if (!redis_client || !redis_client->IsConnected())
+        {
+            return snapshot;
+        }
+
+        const auto nodes = redis_client->GetAllNodes();
+        const auto room_snapshots = redis_client->GetAllRoomSnapshots();
+
+        for (const auto &entry : room_snapshots)
+        {
+            try
+            {
+                auto room_json = json::parse(entry.second);
+                if (!room_json.contains("status") || room_json["status"].get<int>() != 1)
+                {
+                    continue;
+                }
+                snapshot.global_active_rooms++;
+            }
+            catch (const std::exception &)
+            {
+                continue;
+            }
+        }
+
+        const int active_nodes = static_cast<int>(nodes.size());
+        snapshot.global_capacity = active_nodes * snapshot.local_max_rooms;
+        if (snapshot.global_capacity > 0)
+        {
+            snapshot.global_utilization = static_cast<double>(snapshot.global_active_rooms) /
+                                          static_cast<double>(snapshot.global_capacity);
+        }
+
+        // Backward-compatible field; keep aligned with the global utilization ratio.
+        snapshot.min_utilization = snapshot.global_utilization;
+
+        return snapshot;
+    }
+
+    static std::string BuildMetricsBody(const MetricsSnapshot &snapshot)
+    {
         std::ostringstream body;
         body << "# HELP pokemon_active_rooms Current number of active rooms\n";
         body << "# TYPE pokemon_active_rooms gauge\n";
-        body << "pokemon_active_rooms " << active_rooms << "\n";
+        body << "pokemon_active_rooms " << snapshot.local_active_rooms << "\n";
         body << "# HELP pokemon_max_capacity Maximum room capacity\n";
         body << "# TYPE pokemon_max_capacity gauge\n";
-        body << "pokemon_max_capacity " << max_rooms << "\n";
-        body << "# HELP pokemon_room_utilization Active room utilization\n";
+        body << "pokemon_max_capacity " << snapshot.local_max_rooms << "\n";
+        body << "# HELP pokemon_room_utilization Local room utilization\n";
         body << "# TYPE pokemon_room_utilization gauge\n";
-        body << "pokemon_room_utilization " << utilization << "\n";
+        body << "pokemon_room_utilization " << snapshot.local_utilization << "\n";
+        body << "# HELP pokemon_room_utilization_global Global room utilization across all registered pods\n";
+        body << "# TYPE pokemon_room_utilization_global gauge\n";
+        body << "pokemon_room_utilization_global " << snapshot.global_utilization << "\n";
+        body << "# HELP pokemon_room_utilization_min Minimum room utilization across active pods\n";
+        body << "# TYPE pokemon_room_utilization_min gauge\n";
+        body << "pokemon_room_utilization_min " << snapshot.min_utilization << "\n";
         return body.str();
     }
 
@@ -484,9 +578,8 @@ namespace pokemon_game
                 std::ostringstream response;
                 if (is_metrics)
                 {
-                    int active_rooms = room_manager_->GetRoomCount();
-                    int max_rooms = room_manager_->GetMaxRooms();
-                    body = BuildMetricsBody(active_rooms, max_rooms);
+                    MetricsSnapshot metrics_snapshot = CollectMetricsSnapshot(room_manager_, redis_client_, pod_ip_);
+                    body = BuildMetricsBody(metrics_snapshot);
                     response << "HTTP/1.1 200 OK\r\n"
                              << "Content-Type: text/plain; version=0.0.4\r\n"
                              << "Content-Length: " << body.size() << "\r\n\r\n"

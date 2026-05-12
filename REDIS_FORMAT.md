@@ -40,8 +40,8 @@ pokemon:room:959784
 |------|------|------|------|------|
 | `room_id` | string | ✅ | 房间唯一标识符 | `"959784"` |
 | `status` | int | ✅ | 房间状态（1=active） | `1` |
-| `node_id` | int | ✅ | 节点 ID（C++ 初始化为 0，由 Go 填充实际值） | `0` |
-| `server_id` | string | ✅ | 创建房间的服务器 ID | `"server-1778480087-12345"` |
+| `node_id` | int | ✅ | 节点 ID（C++ 初始化为 0，由 Go 侧后续按运行节点填充） | `0` |
+| `server_id` | string | ✅ | 创建房间的服务实例标识符（随机值，用于区分节点实例） | `"server-1778480087-12345"` |
 | `players` | array | ✅ | 房间内的玩家列表 | `[]` |
 | `ready_players` | object | ✅ | 准备就绪的玩家映射 | `{}` |
 | `selected_pokemon` | object | ✅ | 玩家选择的宝可梦映射 | `{}` |
@@ -213,6 +213,8 @@ type RoomSnapshot struct {
 - **TTL 管理**：快照键的 TTL 为 3600 秒，Go 服务应定期检查 Redis 中的房间数据是否仍有效
 - **JSON 格式**：所有 JSON 值都是紧凑格式（无空格），易于 Redis 存储和传输
 - **占位符字段**：C++ 初始化的 `node_id=0` 和空的 `players`、`ready_players`、`selected_pokemon` 是占位符，由 Go 服务根据实际情况填充
+- **HPA 判断**：当前扩容依据为 Redis 中活跃房间总数 ÷（活跃 pod 数 × 单 pod 最大房间数）
+- **实例标识**：`server_id` 用于区分服务实例，不直接作为扩缩容依据；扩缩容以 Redis 汇总值为准
 - **时间戳**：`updated_at` 使用 Unix 时间戳（秒），精度为秒级
 - **并发安全**：Redis 原生支持并发读写，但 Go 服务需要处理竞态条件（如同时修改房间状态）
 

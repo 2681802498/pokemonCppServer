@@ -1,11 +1,14 @@
 #include "redis_client.h"
 #include <iostream>
 #include <sstream>
+#include <cstdlib>
+#include <nlohmann/json.hpp>
 
 namespace pokemon_game
 {
 
     const std::string RedisClient::NODES_SET_KEY = "pokemon:server:nodes";
+    const std::string RedisClient::NODE_HEARTBEAT_PREFIX = "pokemon:server:heartbeat:";
 
     RedisClient::RedisClient() : context_(nullptr) {}
 
@@ -68,8 +71,36 @@ namespace pokemon_game
 
         if (success)
         {
+            TouchNodeHeartbeat(pod_ip);
             std::cout << "Node " << pod_ip << " registered in Redis" << std::endl;
         }
+        return success;
+    }
+
+    bool RedisClient::TouchNodeHeartbeat(const std::string &pod_ip, int ttl_seconds)
+    {
+        if (!IsConnected())
+        {
+            std::cerr << "Redis is not connected" << std::endl;
+            return false;
+        }
+
+        std::string key = NODE_HEARTBEAT_PREFIX + pod_ip;
+        // Ensure minimum TTL of 5 minutes to prevent heartbeat expiration
+        if (ttl_seconds < 300) {
+            ttl_seconds = 300;
+        }
+        redisReply *reply = (redisReply *)redisCommand(context_,
+                                                       "SET %s 1 EX %d", key.c_str(), ttl_seconds);
+
+        if (reply == nullptr)
+        {
+            std::cerr << "Redis command failed" << std::endl;
+            return false;
+        }
+
+        bool success = reply->type == REDIS_REPLY_STATUS && reply->str != nullptr && std::string(reply->str) == "OK";
+        freeReplyObject(reply);
         return success;
     }
 
@@ -81,8 +112,9 @@ namespace pokemon_game
             return false;
         }
 
+        std::string heartbeat_key = NODE_HEARTBEAT_PREFIX + pod_ip;
         redisReply *reply = (redisReply *)redisCommand(context_,
-                                                       "SREM %s %s", NODES_SET_KEY.c_str(), pod_ip.c_str());
+                                                       "DEL %s %s", NODES_SET_KEY.c_str(), heartbeat_key.c_str());
 
         if (reply == nullptr)
         {
@@ -124,13 +156,104 @@ namespace pokemon_game
         {
             if (reply->element[i]->type == REDIS_REPLY_STRING)
             {
-                nodes.push_back(std::string(reply->element[i]->str,
-                                            reply->element[i]->len));
+                std::string pod_ip(reply->element[i]->str, reply->element[i]->len);
+                std::string heartbeat_key = NODE_HEARTBEAT_PREFIX + pod_ip;
+
+                redisReply *heartbeat_reply = (redisReply *)redisCommand(context_, "EXISTS %s", heartbeat_key.c_str());
+                if (heartbeat_reply == nullptr)
+                {
+                    continue;
+                }
+
+                bool alive = heartbeat_reply->type == REDIS_REPLY_INTEGER && heartbeat_reply->integer == 1;
+                freeReplyObject(heartbeat_reply);
+
+                if (alive)
+                {
+                    nodes.push_back(pod_ip);
+                }
+                else
+                {
+                    redisReply *cleanup_reply = (redisReply *)redisCommand(context_,
+                                                                           "SREM %s %s", NODES_SET_KEY.c_str(), pod_ip.c_str());
+                    if (cleanup_reply)
+                    {
+                        freeReplyObject(cleanup_reply);
+                    }
+                }
             }
         }
 
         freeReplyObject(reply);
         return nodes;
+    }
+
+    std::vector<std::pair<std::string, std::string>> RedisClient::GetAllRoomSnapshots()
+    {
+        std::vector<std::pair<std::string, std::string>> snapshots;
+
+        if (!IsConnected())
+        {
+            std::cerr << "Redis is not connected" << std::endl;
+            return snapshots;
+        }
+
+        constexpr int kScanCount = 128;
+        unsigned long long cursor = 0;
+
+        do
+        {
+            redisReply *scan_reply = (redisReply *)redisCommand(
+                context_, "SCAN %llu MATCH %s COUNT %d", cursor, "pokemon:room:*", kScanCount);
+
+            if (scan_reply == nullptr || scan_reply->type != REDIS_REPLY_ARRAY || scan_reply->elements < 2)
+            {
+                if (scan_reply)
+                {
+                    freeReplyObject(scan_reply);
+                }
+                break;
+            }
+
+            redisReply *cursor_reply = scan_reply->element[0];
+            redisReply *keys_reply = scan_reply->element[1];
+            cursor = std::strtoull(cursor_reply->str, nullptr, 10);
+
+            if (keys_reply->type == REDIS_REPLY_ARRAY)
+            {
+                for (size_t i = 0; i < keys_reply->elements; ++i)
+                {
+                    redisReply *key_reply = keys_reply->element[i];
+                    if (key_reply == nullptr || key_reply->type != REDIS_REPLY_STRING)
+                    {
+                        continue;
+                    }
+
+                    std::string key(key_reply->str, key_reply->len);
+                    if (key.size() >= 8 && key.compare(key.size() - 8, 8, ":command") == 0)
+                    {
+                        continue;
+                    }
+
+                    redisReply *value_reply = (redisReply *)redisCommand(context_, "GET %s", key.c_str());
+                    if (value_reply == nullptr)
+                    {
+                        continue;
+                    }
+
+                    if (value_reply->type == REDIS_REPLY_STRING)
+                    {
+                        snapshots.emplace_back(key, std::string(value_reply->str, value_reply->len));
+                    }
+
+                    freeReplyObject(value_reply);
+                }
+            }
+
+            freeReplyObject(scan_reply);
+        } while (cursor != 0);
+
+        return snapshots;
     }
 
     bool RedisClient::SetRoomData(const std::string &room_id, const std::string &data)
@@ -205,6 +328,89 @@ namespace pokemon_game
         }
         freeReplyObject(reply);
         return success;
+    }
+
+
+    bool RedisClient::DeleteRoomsForServer(const std::string &pod_ip)
+    {
+        if (!IsConnected())
+        {
+            std::cerr << "Redis is not connected" << std::endl;
+            return false;
+        }
+
+        constexpr int kScanCount = 128;
+        unsigned long long cursor = 0;
+        bool any_deleted = false;
+
+        do
+        {
+            redisReply *scan_reply = (redisReply *)redisCommand(
+                context_, "SCAN %llu MATCH %s COUNT %d", cursor, "pokemon:room:*", kScanCount);
+
+            if (scan_reply == nullptr || scan_reply->type != REDIS_REPLY_ARRAY || scan_reply->elements < 2)
+            {
+                if (scan_reply)
+                    freeReplyObject(scan_reply);
+                break;
+            }
+
+            redisReply *cursor_reply = scan_reply->element[0];
+            redisReply *keys_reply = scan_reply->element[1];
+            cursor = std::strtoull(cursor_reply->str, nullptr, 10);
+
+            if (keys_reply->type == REDIS_REPLY_ARRAY)
+            {
+                for (size_t i = 0; i < keys_reply->elements; ++i)
+                {
+                    redisReply *key_reply = keys_reply->element[i];
+                    if (key_reply == nullptr || key_reply->type != REDIS_REPLY_STRING)
+                    {
+                        continue;
+                    }
+
+                    std::string key(key_reply->str, key_reply->len);
+                    if (key.size() >= 8 && key.compare(key.size() - 8, 8, ":command") == 0)
+                    {
+                        continue;
+                    }
+
+                    redisReply *value_reply = (redisReply *)redisCommand(context_, "GET %s", key.c_str());
+                    if (value_reply == nullptr)
+                    {
+                        continue;
+                    }
+
+                    if (value_reply->type == REDIS_REPLY_STRING)
+                    {
+                        try
+                        {
+                            auto j = nlohmann::json::parse(std::string(value_reply->str, value_reply->len));
+                            if (j.contains("server_id") && j["server_id"].is_string() && j["server_id"].get<std::string>() == pod_ip)
+                            {
+                                std::string command_key = key + ":command";
+                                redisReply *del_reply = (redisReply *)redisCommand(context_, "DEL %s %s", key.c_str(), command_key.c_str());
+                                if (del_reply)
+                                {
+                                    freeReplyObject(del_reply);
+                                }
+                                any_deleted = true;
+                            }
+                        }
+                        catch (const std::exception &)
+                        {
+                            // ignore parse errors
+                        }
+                    }
+
+                    freeReplyObject(value_reply);
+                }
+            }
+
+            freeReplyObject(scan_reply);
+        } while (cursor != 0);
+
+        return any_deleted;
     }
 
 } // namespace pokemon_game
