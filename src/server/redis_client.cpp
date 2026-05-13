@@ -142,8 +142,9 @@ namespace pokemon_game
             return nodes;
         }
 
+        // Query heartbeat keys directly instead of relying on NODES_SET_KEY (which can be out of sync)
         redisReply *reply = (redisReply *)redisCommand(context_,
-                                                       "SMEMBERS %s", NODES_SET_KEY.c_str());
+                                                       "KEYS %s", "pokemon:server:heartbeat:*");
 
         if (reply == nullptr || reply->type != REDIS_REPLY_ARRAY)
         {
@@ -152,33 +153,20 @@ namespace pokemon_game
             return nodes;
         }
 
+        // Extract pod IPs from heartbeat keys
+        const std::string prefix = NODE_HEARTBEAT_PREFIX;  // "pokemon:server:heartbeat:"
         for (size_t i = 0; i < reply->elements; i++)
         {
             if (reply->element[i]->type == REDIS_REPLY_STRING)
             {
-                std::string pod_ip(reply->element[i]->str, reply->element[i]->len);
-                std::string heartbeat_key = NODE_HEARTBEAT_PREFIX + pod_ip;
-
-                redisReply *heartbeat_reply = (redisReply *)redisCommand(context_, "EXISTS %s", heartbeat_key.c_str());
-                if (heartbeat_reply == nullptr)
+                std::string key(reply->element[i]->str, reply->element[i]->len);
+                // Extract IP from "pokemon:server:heartbeat:X.X.X.X"
+                if (key.size() > prefix.size() && key.substr(0, prefix.size()) == prefix)
                 {
-                    continue;
-                }
-
-                bool alive = heartbeat_reply->type == REDIS_REPLY_INTEGER && heartbeat_reply->integer == 1;
-                freeReplyObject(heartbeat_reply);
-
-                if (alive)
-                {
-                    nodes.push_back(pod_ip);
-                }
-                else
-                {
-                    redisReply *cleanup_reply = (redisReply *)redisCommand(context_,
-                                                                           "SREM %s %s", NODES_SET_KEY.c_str(), pod_ip.c_str());
-                    if (cleanup_reply)
+                    std::string pod_ip = key.substr(prefix.size());
+                    if (!pod_ip.empty())
                     {
-                        freeReplyObject(cleanup_reply);
+                        nodes.push_back(pod_ip);
                     }
                 }
             }
