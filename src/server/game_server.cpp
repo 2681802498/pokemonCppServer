@@ -174,9 +174,26 @@ namespace pokemon_game
             std::cerr << "[gRPC SendCommand] Failed to process battle turn for room " << request->room_id()
                       << ": " << battle_error << std::endl;
             response->set_code(4);
-            response->set_message("Failed to process battle turn: " + battle_error);
-            return grpc::Status(grpc::StatusCode::INTERNAL,
-                                "Failed to process battle turn");
+            
+            // Include detailed error information in the response
+            try
+            {
+                nlohmann::json error_response;
+                error_response["ok"] = false;
+                error_response["error"] = battle_error;
+                if (battle_response.contains("errors"))
+                {
+                    error_response["errors"] = battle_response["errors"];
+                }
+                response->set_message(error_response.dump());
+            }
+            catch (const std::exception& e)
+            {
+                response->set_message("Failed to process battle turn: " + battle_error);
+            }
+            
+            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                                "Battle action validation failed: " + battle_error);
         }
 
         // Store the full battle state in Redis
@@ -190,7 +207,29 @@ namespace pokemon_game
         // Return the full battle response JSON back to the Go server so it can sync actions/state
         try
         {
-            response->set_message(battle_response.dump());
+            if (battle_response.value("waiting", false))
+            {
+                nlohmann::json minimal_response = {
+                    {"ok", battle_response.value("ok", true)},
+                    {"waiting", true},
+                    {"status", "waiting_for_opponent"},
+                    {"submitted_player_id", request->player_id()}};
+
+                if (battle_response.contains("pending_side"))
+                {
+                    minimal_response["pending_side"] = battle_response["pending_side"];
+                }
+                if (battle_response.contains("turn"))
+                {
+                    minimal_response["turn"] = battle_response["turn"];
+                }
+
+                response->set_message(minimal_response.dump());
+            }
+            else
+            {
+                response->set_message(battle_response.dump());
+            }
         }
         catch (const std::exception &e)
         {

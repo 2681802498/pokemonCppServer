@@ -76,7 +76,25 @@ namespace pokemon_game
         }
 
         *response = it->second->processTurn(turn_request);
-        return response->contains("turn");
+        
+        // Check if the response contains errors
+        if (response->contains("errors") && response->value("ok", true) == false)
+        {
+            if (error)
+            {
+                const auto& errors = (*response)["errors"];
+                std::string error_msg;
+                if (errors.is_array() && !errors.empty())
+                {
+                    error_msg = errors[0].get<std::string>();
+                }
+                *error = error_msg.empty() ? "battle validation failed" : error_msg;
+            }
+            return false;
+        }
+        
+        // Success if we get here (either has turn or waiting state)
+        return response->value("ok", true);
     }
 
     bool BattleEngine::GetState(const std::string &session_id,

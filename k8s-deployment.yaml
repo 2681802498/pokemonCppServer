@@ -26,7 +26,7 @@ spec:
     spec:
       containers:
       - name: pokemon-server
-        image: why5899/pokemon-worker:v1.0.7
+        image: why5899/pokemon-worker:v1.1.0
         imagePullPolicy: Always
         ports:
         - containerPort: 50051
