@@ -6,6 +6,7 @@ This is a production-ready skeleton for a C++ game server running in Kubernetes 
 - **Redis** for node registration and room data persistence
 - **Kubernetes** for orchestration and service discovery
 - **C++17** for modern, performant code
+- **Embedded simulator** for direct in-process battle execution
 
 ## Directory Structure
 
@@ -95,6 +96,12 @@ kubectl port-forward svc/pokemon-server-service 50051:50051
 - `GetRoomStatus`: Query room information
 - `CloseRoom`: Terminate rooms
 
+### 1.1 Embedded Battle Flow
+- Front end sends JSON to Go
+- Go forwards `init_json` / `action` to the embedded simulator
+- C++ returns battle JSON directly
+- Go passes the JSON response back to the front end
+
 ### 2. Kubernetes Integration
 Automatic discovery and configuration:
 ```cpp
@@ -130,12 +137,17 @@ When receiving SIGTERM signal:
   - `updated_at`: int64
 - Service discovery via Redis Set
 
+### 6. Session Management
+- Battle sessions are stored in memory inside `BattleEngine`
+- `session_id` is used to map requests to the correct simulator instance
+- Simulator cache file writes are disabled in embedded mode to avoid conflicts
+
 ## API Examples
 
 ### Create Room
 ```bash
 grpcurl -plaintext \
-  -d '{"room_name": "MainArena", "max_players": 10}' \
+  -d '{"room_id": "room-001", "init_json": "{\"side_a\":{\"name\":\"Side A\",\"pokemon\":[...]},\"side_b\":{\"name\":\"Side B\",\"pokemon\":[...]}}"}' \
   localhost:50051 pokemon.game.RoomService/CreateRoom
 ```
 
@@ -174,6 +186,15 @@ grpcurl -plaintext \
   -d '{"room_id": "550e8400-e29b-41d4-a716-446655440000"}' \
   localhost:50051 pokemon.game.RoomService/CloseRoom
 ```
+
+## Notes for JSON Payloads
+
+Use JSON strings for battle initialization and actions.
+
+- `init_json`: initial battle setup passed to `BattleSession::createFromJson`
+- `action`: turn JSON passed to `BattleSession::processTurn`
+
+The server is responsible for parsing these strings and returning battle state JSON.
 
 ## Development Workflow
 

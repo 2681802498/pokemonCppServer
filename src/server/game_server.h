@@ -7,6 +7,7 @@
 #include <grpcpp/grpcpp.h>
 #include "room_service.grpc.pb.h"
 #include "room_manager.h"
+#include "battle_engine.h"
 #include "redis_client.h"
 
 namespace pokemon_game
@@ -16,6 +17,7 @@ namespace pokemon_game
     {
     public:
         GameServiceImpl(std::shared_ptr<RoomManager> room_manager,
+                        std::shared_ptr<BattleEngine> battle_engine,
                         std::shared_ptr<RedisClient> redis_client,
                         const std::string &server_id,
                         const std::string &pod_ip);
@@ -38,6 +40,7 @@ namespace pokemon_game
 
     private:
         std::shared_ptr<RoomManager> room_manager_;
+        std::shared_ptr<BattleEngine> battle_engine_;
         std::shared_ptr<RedisClient> redis_client_;
         std::string server_id_;
         std::string pod_ip_;
@@ -64,6 +67,11 @@ namespace pokemon_game
             return room_manager_;
         }
 
+        std::shared_ptr<BattleEngine> GetBattleEngine()
+        {
+            return battle_engine_;
+        }
+
         // Check if server is running
         bool IsRunning() const;
 
@@ -75,6 +83,7 @@ namespace pokemon_game
         std::string redis_url_;
         std::string server_id_;
         std::shared_ptr<RoomManager> room_manager_;
+        std::shared_ptr<BattleEngine> battle_engine_;
         std::shared_ptr<RedisClient> redis_client_;
         std::unique_ptr<GameServiceImpl> service_;
         std::unique_ptr<grpc::Server> server_;

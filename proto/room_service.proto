@@ -17,13 +17,13 @@ service Calculator {
 
 message CreateRoomRequest {
     string room_id = 1;
-    string init_json = 2; // BattleSession::createFromJson 所需初始化数据
+    string init_json = 2; // BattleSession::createFromJson 所需的初始化 JSON
 }
 
 message GameCommand {
     string room_id = 1;
     string player_id = 2;
-    string action = 3; // 比如 "move", "skill"
+    string action = 3; // 回合 JSON，建议形如 {"actions":[...]} 
 }
 
 message CommonResponse {

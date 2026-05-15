@@ -9,6 +9,7 @@
 ✅ **优雅停机** - SIGTERM 信号处理，5秒缓冲期  
 ✅ **Redis 集成** - 节点注册和房间数据持久化  
 ✅ **房间管理** - UUID ID，玩家计数模拟，活动计数器  
+✅ **内嵌 simulator** - battle_core 直接链接进服务进程，Go 透传 JSON，C++ 返回战斗结果 JSON
 
 ## 📁 项目结构
 
@@ -91,6 +92,18 @@ kubectl port-forward svc/pokemon-server-service 50051:50051
 
 ## 🔧 核心实现细节
 
+### 0. 前端到 simulator 的调用链
+
+```text
+前端 JSON -> Go 服务 -> BattleEngine -> BattleSession -> BattleToJson -> Go 服务 -> 前端 JSON
+```
+
+关键点：
+- `CreateRoom` 使用 `init_json` 初始化战斗会话
+- `SendCommand` 使用 `action` 传回合 JSON
+- `DestroyRoom` 同时清理房间和内存中的 battle session
+- simulator 的 cache 写文件在嵌入模式下已关闭，避免多会话冲突
+
 ### 1. gRPC 服务 (proto/room_service.proto)
 
 ```protobuf
@@ -100,6 +113,8 @@ service RoomService {
   rpc CloseRoom(CloseRoomRequest) returns (CloseRoomResponse) {}
 }
 ```
+
+当前实现中，`CreateRoomRequest.init_json` 和 `GameCommand.action` 都按 JSON 字符串处理，由服务端解析后直接传入 simulator。
 
 **请求示例:**
 ```bash
@@ -173,6 +188,16 @@ redis-cli SMEMBERS pokemon:server:nodes
 - **活动计数器**: 房间运行计数
 - **最大房间数**: 每个服务器 10 间
 - **维护模式**: `is_maintaining = true` 时拒绝新房间
+
+### 6. 内嵌 BattleEngine
+
+- `BattleEngine` 维护 `session_id -> BattleSession`
+- `CreateSession` 负责创建战斗上下文
+- `ProcessTurn` 负责回合推进和状态输出
+- `GetState` 负责返回当前战斗 JSON
+- `DestroySession` 负责释放会话
+
+这层适配器的存在，让 Go 服务只需要处理 JSON 和业务逻辑，不需要理解 simulator 内部对象结构。
 
 ## 📊 项目技术栈
 

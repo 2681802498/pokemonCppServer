@@ -35,10 +35,11 @@ namespace pokemon_game
     }
 
     GameServiceImpl::GameServiceImpl(std::shared_ptr<RoomManager> room_manager,
+                                     std::shared_ptr<BattleEngine> battle_engine,
                                      std::shared_ptr<RedisClient> redis_client,
                                      const std::string &server_id,
                                      const std::string &pod_ip)
-        : room_manager_(room_manager), redis_client_(redis_client), server_id_(server_id), pod_ip_(pod_ip) {}
+        : room_manager_(room_manager), battle_engine_(battle_engine), redis_client_(redis_client), server_id_(server_id), pod_ip_(pod_ip) {}
 
     grpc::Status GameServiceImpl::CreateRoom(grpc::ServerContext *context,
                                              const calc::CreateRoomRequest *request,
@@ -75,39 +76,10 @@ namespace pokemon_game
         }
 
         // Parse init_json and create room
+        json init_data;
         try
         {
-            json init_data = json::parse(request->init_json());
-            // Create room with default parameters
-            std::string actual_room_id = room_manager_->CreateRoomWithId(
-                room_id, "Battle Room", 2);
-
-            if (actual_room_id.empty())
-            {
-                response->set_code(4);
-                response->set_message("Failed to create room");
-                return grpc::Status(grpc::StatusCode::INTERNAL,
-                                    "Failed to create room");
-            }
-
-            // Store room snapshot in Redis for Go service consumption
-            // Missing fields are stored as placeholders so Go can unmarshal directly.
-            // status: 1 = active, node_id: 0 = placeholder
-            json room_data = BuildRoomSnapshotJson(actual_room_id, 1, 0, server_id_);
-
-            std::cout << "[gRPC CreateRoom] Preparing to store room snapshot: room_id=" << actual_room_id 
-                      << " snapshot=" << room_data.dump() << std::endl;
-            bool redis_ok = redis_client_->SetRoomData(actual_room_id, room_data.dump());
-            if (redis_ok) {
-                std::cout << "[gRPC CreateRoom] Room snapshot stored successfully" << std::endl;
-            } else {
-                std::cerr << "[gRPC CreateRoom] WARNING: Failed to store room snapshot in Redis!" << std::endl;
-            }
-
-            response->set_code(0);
-            response->set_message("Room created successfully");
-            std::cout << "Room created via gRPC: " << actual_room_id << std::endl;
-            return grpc::Status::OK;
+            init_data = json::parse(request->init_json());
         }
         catch (const std::exception &e)
         {
@@ -116,6 +88,47 @@ namespace pokemon_game
             return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
                                 "Invalid init_json format");
         }
+
+        // Create room with default parameters
+        std::string actual_room_id = room_manager_->CreateRoomWithId(
+            room_id, "Battle Room", 2);
+
+        if (actual_room_id.empty())
+        {
+            response->set_code(4);
+            response->set_message("Failed to create room");
+            return grpc::Status(grpc::StatusCode::INTERNAL,
+                                "Failed to create room");
+        }
+
+        std::string battle_error;
+        if (!battle_engine_ || !battle_engine_->CreateSession(actual_room_id, init_data, &battle_error))
+        {
+            std::cerr << "[gRPC CreateRoom] Failed to initialize battle session for room " << actual_room_id
+                      << ": " << battle_error << std::endl;
+            room_manager_->CloseRoom(actual_room_id);
+            response->set_code(6);
+            response->set_message("Failed to initialize battle session: " + battle_error);
+            return grpc::Status(grpc::StatusCode::INTERNAL,
+                                "Failed to initialize battle session");
+        }
+
+        nlohmann::json room_state;
+        if (battle_engine_->GetState(actual_room_id, &room_state, &battle_error))
+        {
+            std::cout << "[gRPC CreateRoom] Initial battle state: room_id=" << actual_room_id
+                      << " state=" << room_state.dump() << std::endl;
+            bool redis_ok = redis_client_->SetRoomData(actual_room_id, room_state.dump());
+            if (!redis_ok)
+            {
+                std::cerr << "[gRPC CreateRoom] WARNING: Failed to store initial battle state in Redis!" << std::endl;
+            }
+        }
+
+        response->set_code(0);
+        response->set_message("Room created successfully");
+        std::cout << "Room created via gRPC: " << actual_room_id << std::endl;
+        return grpc::Status::OK;
     }
 
     grpc::Status GameServiceImpl::SendCommand(grpc::ServerContext *context,
@@ -141,55 +154,53 @@ namespace pokemon_game
                                 "Room is not active");
         }
 
-        // Store command in Redis for processing
+        json turn_request;
         try
         {
-            std::string response_message = "Command received";
-            std::time_t now = std::time(nullptr);
-
-            // If action is JSON and matches battle_action, return a timestamp in response
-            try
-            {
-                json action_json = json::parse(request->action());
-                if (action_json.contains("cmd") && action_json["cmd"] == "battle_action")
-                {
-                    response_message = "Command received at " + std::to_string(now);
-                }
-            }
-            catch (const std::exception &)
-            {
-                // Non-JSON action strings are allowed; keep default response message
-            }
-
-            response_message += " | counter=" + std::to_string(room.counter);
-
-            json command_data = {
-                {"player_id", request->player_id()},
-                {"action", request->action()},
-                {"timestamp", now}};
-
-            std::string command_key = request->room_id() + ":command";
-            std::cout << "[gRPC SendCommand] Storing command: key=" << command_key 
-                      << " data=" << command_data.dump() << std::endl;
-            bool redis_ok = redis_client_->SetRoomData(command_key, command_data.dump());
-            if (!redis_ok) {
-                std::cerr << "[gRPC SendCommand] WARNING: Failed to store command in Redis!" << std::endl;
-            }
-
-            response->set_code(0);
-            response->set_message(response_message);
-            std::cout << "Command received for room " << request->room_id()
-                      << " from player " << request->player_id()
-                      << " action: " << request->action() << std::endl;
-            return grpc::Status::OK;
+            turn_request = json::parse(request->action());
         }
         catch (const std::exception &e)
         {
             response->set_code(3);
-            response->set_message(std::string("Failed to process command: ") + e.what());
-            return grpc::Status(grpc::StatusCode::INTERNAL,
-                                "Failed to process command");
+            response->set_message(std::string("Failed to parse action json: ") + e.what());
+            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                                "Invalid action json format");
         }
+
+        nlohmann::json battle_response;
+        std::string battle_error;
+        if (!battle_engine_ || !battle_engine_->ProcessTurn(request->room_id(), turn_request, &battle_response, &battle_error))
+        {
+            std::cerr << "[gRPC SendCommand] Failed to process battle turn for room " << request->room_id()
+                      << ": " << battle_error << std::endl;
+            response->set_code(4);
+            response->set_message("Failed to process battle turn: " + battle_error);
+            return grpc::Status(grpc::StatusCode::INTERNAL,
+                                "Failed to process battle turn");
+        }
+
+        // Store the full battle state in Redis
+        bool redis_ok = redis_client_->SetRoomData(request->room_id(), battle_response.dump());
+        if (!redis_ok)
+        {
+            std::cerr << "[gRPC SendCommand] WARNING: Failed to store battle state in Redis!" << std::endl;
+        }
+
+        response->set_code(0);
+        // Return the full battle response JSON back to the Go server so it can sync actions/state
+        try
+        {
+            response->set_message(battle_response.dump());
+        }
+        catch (const std::exception &e)
+        {
+            // Fallback to a simple message if serialization fails
+            response->set_message(std::string("Battle turn processed successfully (failed to serialize response): ") + e.what());
+        }
+        std::cout << "Command processed for room " << request->room_id()
+                  << " from player " << request->player_id()
+                  << " action: " << request->action() << std::endl;
+        return grpc::Status::OK;
     }
 
     grpc::Status GameServiceImpl::DestroyRoom(grpc::ServerContext *context,
@@ -204,6 +215,11 @@ namespace pokemon_game
             response->set_message("Room not found");
             return grpc::Status(grpc::StatusCode::NOT_FOUND,
                                 "Room not found");
+        }
+
+        if (battle_engine_)
+        {
+            battle_engine_->DestroySession(request->room_id());
         }
 
         // Delete from Redis
@@ -257,6 +273,7 @@ namespace pokemon_game
     {
         server_id_ = GenerateServerId();
         room_manager_ = std::make_shared<RoomManager>(10); // Max 10 rooms
+        battle_engine_ = std::make_shared<BattleEngine>();
         redis_client_ = std::make_shared<RedisClient>();
 
         server_address_ = pod_ip + ":50051";
@@ -311,7 +328,7 @@ namespace pokemon_game
         }
 
         // Create gRPC service with server_id
-        service_ = std::make_unique<GameServiceImpl>(room_manager_, redis_client_, server_id_, pod_ip_);
+        service_ = std::make_unique<GameServiceImpl>(room_manager_, battle_engine_, redis_client_, server_id_, pod_ip_);
         std::cout << "GameServer initialized with server_id: " << server_id_ << std::endl;
 
         // Build and start gRPC server

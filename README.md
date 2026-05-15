@@ -58,6 +58,12 @@ pokemonCppServer/
 - Room activity tracking with counters
 - Maintenance mode support
 
+### 6. Embedded Simulator Integration
+- Go service receives JSON from the front end
+- `pokemon_server` directly invokes the embedded simulator through `BattleEngine`
+- Battle session state is kept in memory and returned as JSON
+- Redis is still available for persistence and monitoring, but no longer used as the primary simulator bridge
+
 ## Prerequisites
 
 ### Local Development
@@ -177,6 +183,15 @@ kill -TERM <PID>
 - **Container-native**: Respects Kubernetes conventions (POD_IP, graceful shutdown)
 - **Redis-backed**: Node discovery via Redis Set
 - **Activity simulation**: Automatic player count changes for testing
+- **Embedded battle core**: simulator is linked into the server process through `battle_core`
+
+## Request Flow
+
+1. Front end sends JSON to the Go-facing gRPC endpoint.
+2. Go service parses the payload and forwards it to `BattleEngine`.
+3. `BattleEngine` creates or looks up a `BattleSession` in memory.
+4. The simulator processes the turn and returns battle JSON.
+5. Go service returns the JSON response to the front end.
 
 ## Implementation Details
 

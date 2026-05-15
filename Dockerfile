@@ -9,6 +9,7 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
     grpc-dev \
     grpc-plugins \
     protobuf-dev \
+    curl-dev \
     hiredis-dev \
     nlohmann-json \
     linux-headers
@@ -33,6 +34,9 @@ WORKDIR /app
 
 # 1. 拷贝二进制
 COPY --from=builder /build/build/bin/pokemon_server /app/pokemon_server
+
+# 拷贝数据文件
+COPY --from=builder /build/src/simulator/data/ /app/data/
 
 # 2. 【核武器级拷贝】直接同步所有的库目录
 # 既然不知道它在哪，我们就把 builder 里的所有库都拷过来
