@@ -1,0 +1,73 @@
+{
+  "side_a": {
+    "name": "Side A",
+    "pokemon": [
+      {
+        "speciesID": 6,
+        "level": 50,
+        "nature": 10,
+        "ability": 66,
+        "item": 92,
+        "ivs": {"hp": 31, "attack": 31, "defense": 31, "specialAttack": 31, "specialDefense": 31, "speed": 31},
+        "evs": {"hp": 0, "attack": 0, "defense": 4, "specialAttack": 252, "specialDefense": 0, "speed": 252},
+        "moves": [53, 126, 403, 406]
+      },
+      {
+        "speciesID": 149,
+        "level": 50,
+        "nature": 3,
+        "ability": 5,
+        "item": 161,
+        "ivs": {"hp": 31, "attack": 31, "defense": 31, "specialAttack": 31, "specialDefense": 31, "speed": 31},
+        "evs": {"hp": 0, "attack": 252, "defense": 4, "specialAttack": 0, "specialDefense": 0, "speed": 252},
+        "moves": [337, 89, 245, 355]
+      },
+      {
+        "speciesID": 25,
+        "level": 50,
+        "nature": 10,
+        "ability": 9,
+        "item": 99,
+        "ivs": {"hp": 31, "attack": 31, "defense": 31, "specialAttack": 31, "specialDefense": 31, "speed": 31},
+        "evs": {"hp": 0, "attack": 0, "defense": 4, "specialAttack": 252, "specialDefense": 0, "speed": 252},
+        "moves": [85, 521, 447, 164]
+      }
+    ]
+  },
+  "side_b": {
+    "name": "Side B",
+    "pokemon": [
+      {
+        "speciesID": 3,
+        "level": 50,
+        "nature": 15,
+        "ability": 65,
+        "item": 87,
+        "ivs": {"hp": 31, "attack": 31, "defense": 31, "specialAttack": 31, "specialDefense": 31, "speed": 31},
+        "evs": {"hp": 4, "attack": 0, "defense": 0, "specialAttack": 252, "specialDefense": 0, "speed": 252},
+        "moves": [412, 188, 414, 79]
+      },
+      {
+        "speciesID": 9,
+        "level": 50,
+        "nature": 15,
+        "ability": 67,
+        "item": 86,
+        "ivs": {"hp": 31, "attack": 31, "defense": 31, "specialAttack": 31, "specialDefense": 31, "speed": 31},
+        "evs": {"hp": 252, "attack": 0, "defense": 4, "specialAttack": 252, "specialDefense": 0, "speed": 0},
+        "moves": [57, 58, 399, 182]
+      },
+      {
+        "speciesID": 143,
+        "level": 50,
+        "nature": 3,
+        "ability": 47,
+        "item": 86,
+        "ivs": {"hp": 31, "attack": 31, "defense": 31, "specialAttack": 31, "specialDefense": 31, "speed": 31},
+        "evs": {"hp": 252, "attack": 252, "defense": 0, "specialAttack": 0, "specialDefense": 4, "speed": 0},
+        "moves": [34, 89, 242, 174]
+      }
+    ]
+  },
+  "seed": 42
+}

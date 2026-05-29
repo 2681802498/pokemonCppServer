@@ -5,9 +5,19 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Embed simulator as an in-process library.
+set(BUILD_TESTING OFF CACHE BOOL "Disable tests when embedding simulator" FORCE)
+
 # Find required packages
 find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
+find_package(CURL REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
+
+# Bring in the simulator core without its standalone executable.
+add_subdirectory(src/simulator EXCLUDE_FROM_ALL)
+
+target_compile_definitions(battle_core PUBLIC BATTLE_SIMULATOR_DISABLE_CACHE_IO)
 
 # Find hiredis without depending on pkg-config (works on Homebrew and standard Linux paths)
 find_path(HIREDIS_INCLUDE_DIR
@@ -59,6 +69,7 @@ add_custom_command(
 set(SERVER_SOURCES
     src/server/main.cpp
     src/server/game_server.cpp
+    src/server/battle_engine.cpp
     src/server/room_manager.cpp
     src/server/signal_handler.cpp
     src/server/redis_client.cpp
@@ -71,6 +82,7 @@ add_executable(pokemon_server ${SERVER_SOURCES})
 target_include_directories(pokemon_server PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/simulator/include"
     ${HIREDIS_INCLUDE_DIR}
     /usr/include/nlohmann
 )
@@ -79,6 +91,9 @@ target_include_directories(pokemon_server PRIVATE
 target_link_libraries(pokemon_server
     gRPC::grpc++_reflection
     protobuf::libprotobuf
+    battle_core
+    nlohmann_json::nlohmann_json
+    CURL::libcurl
     ${HIREDIS_LIBRARY}
     pthread
 )

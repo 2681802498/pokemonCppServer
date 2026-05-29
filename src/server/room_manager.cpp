@@ -33,7 +33,7 @@ namespace pokemon_game
 
     std::string RoomManager::CreateRoom(const std::string &room_name, int max_players)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::shared_mutex> lock(mutex_);
 
         // Check maintenance mode
         if (is_maintaining_)
@@ -61,6 +61,7 @@ namespace pokemon_game
         room.counter = 0;
 
         rooms_[room_id] = room;
+        room_count_.fetch_add(1, std::memory_order_relaxed);
 
         std::cout << "Room created: " << room_id << " (" << room_name << ")" << std::endl;
         return room_id;
@@ -68,7 +69,7 @@ namespace pokemon_game
 
     std::string RoomManager::CreateRoomWithId(const std::string &room_id, const std::string &room_name, int max_players)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::shared_mutex> lock(mutex_);
 
         // Check maintenance mode
         if (is_maintaining_)
@@ -102,6 +103,7 @@ namespace pokemon_game
         room.counter = 0;
 
         rooms_[room_id] = room;
+        room_count_.fetch_add(1, std::memory_order_relaxed);
 
         std::cout << "Room created: " << room_id << " (" << room_name << ")" << std::endl;
         return room_id;
@@ -109,7 +111,7 @@ namespace pokemon_game
 
     bool RoomManager::GetRoomStatus(const std::string &room_id, Room &out_room)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::shared_lock<std::shared_mutex> lock(mutex_);
 
         auto it = rooms_.find(room_id);
         if (it == rooms_.end())
@@ -123,7 +125,7 @@ namespace pokemon_game
 
     bool RoomManager::CloseRoom(const std::string &room_id)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::shared_mutex> lock(mutex_);
 
         auto it = rooms_.find(room_id);
         if (it == rooms_.end())
@@ -132,37 +134,37 @@ namespace pokemon_game
         }
 
         rooms_.erase(it);
+        room_count_.fetch_sub(1, std::memory_order_relaxed);
         std::cout << "Room closed: " << room_id << std::endl;
         return true;
     }
 
     std::map<std::string, Room> RoomManager::GetAllRooms()
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::shared_lock<std::shared_mutex> lock(mutex_);
         return rooms_;
     }
 
     int RoomManager::GetRoomCount() const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return rooms_.size();
+        return room_count_.load(std::memory_order_relaxed);
     }
 
     int RoomManager::GetMaxRooms() const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::shared_lock<std::shared_mutex> lock(mutex_);
         return max_rooms_;
     }
 
     bool RoomManager::CanCreateRoom() const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::shared_lock<std::shared_mutex> lock(mutex_);
         return !is_maintaining_ && rooms_.size() < static_cast<size_t>(max_rooms_);
     }
 
     void RoomManager::UpdateRoomActivity()
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::shared_mutex> lock(mutex_);
 
         // Simulate room activity by incrementing counters
         for (auto &pair : rooms_)

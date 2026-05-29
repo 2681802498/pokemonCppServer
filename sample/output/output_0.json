@@ -1,0 +1,384 @@
+{
+  "descriptions": [
+    "Dragonite 上场了（初始上场）。",
+    "Blastoise 上场了（初始上场）。"
+  ],
+  "turn": 0,
+  "battle": {
+    "field": {
+      "duration": 0,
+      "type": 0
+    },
+    "sides": [
+      {
+        "active": 1,
+        "count": 3,
+        "name": "Side A",
+        "pokemons": [
+          {
+            "abilityId": 1,
+            "fainted": false,
+            "hp": 153,
+            "inBattleStatus": [],
+            "itemId": 0,
+            "maxHp": 153,
+            "moves": [
+              {
+                "id": 53,
+                "maxPp": 15,
+                "pp": 15,
+                "slot": 0
+              },
+              {
+                "id": 126,
+                "maxPp": 5,
+                "pp": 5,
+                "slot": 1
+              },
+              {
+                "id": 403,
+                "maxPp": 15,
+                "pp": 15,
+                "slot": 2
+              },
+              {
+                "id": 406,
+                "maxPp": 10,
+                "pp": 10,
+                "slot": 3
+              }
+            ],
+            "slot": 0,
+            "speciesId": 6,
+            "statStages": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "types": [
+              1,
+              9
+            ]
+          },
+          {
+            "abilityId": 5,
+            "fainted": false,
+            "hp": 166,
+            "inBattleStatus": [],
+            "itemId": 161,
+            "maxHp": 166,
+            "moves": [
+              {
+                "id": 337,
+                "maxPp": 15,
+                "pp": 15,
+                "slot": 0
+              },
+              {
+                "id": 89,
+                "maxPp": 10,
+                "pp": 10,
+                "slot": 1
+              },
+              {
+                "id": 245,
+                "maxPp": 5,
+                "pp": 5,
+                "slot": 2
+              },
+              {
+                "id": 355,
+                "maxPp": 5,
+                "pp": 5,
+                "slot": 3
+              }
+            ],
+            "slot": 1,
+            "speciesId": 149,
+            "statStages": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "types": [
+              14,
+              9
+            ]
+          },
+          {
+            "abilityId": 9,
+            "fainted": false,
+            "hp": 110,
+            "inBattleStatus": [],
+            "itemId": 0,
+            "maxHp": 110,
+            "moves": [
+              {
+                "id": 85,
+                "maxPp": 15,
+                "pp": 15,
+                "slot": 0
+              },
+              {
+                "id": 521,
+                "maxPp": 20,
+                "pp": 20,
+                "slot": 1
+              },
+              {
+                "id": 447,
+                "maxPp": 20,
+                "pp": 20,
+                "slot": 2
+              },
+              {
+                "id": 164,
+                "maxPp": 10,
+                "pp": 10,
+                "slot": 3
+              }
+            ],
+            "slot": 2,
+            "speciesId": 25,
+            "statStages": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "types": [
+              3,
+              18
+            ]
+          }
+        ],
+        "side": 0,
+        "sideEffects": {
+          "lightScreen": 0,
+          "mist": 0,
+          "mudSport": 0,
+          "reflect": 0,
+          "safeguard": 0,
+          "spikes": 0,
+          "stealthRock": 0,
+          "toxicSpikes": 0,
+          "waterSport": 0
+        }
+      },
+      {
+        "active": 1,
+        "count": 3,
+        "name": "Side B",
+        "pokemons": [
+          {
+            "abilityId": 3,
+            "fainted": false,
+            "hp": 156,
+            "inBattleStatus": [],
+            "itemId": 0,
+            "maxHp": 156,
+            "moves": [
+              {
+                "id": 412,
+                "maxPp": 10,
+                "pp": 10,
+                "slot": 0
+              },
+              {
+                "id": 188,
+                "maxPp": 10,
+                "pp": 10,
+                "slot": 1
+              },
+              {
+                "id": 414,
+                "maxPp": 10,
+                "pp": 10,
+                "slot": 2
+              },
+              {
+                "id": 79,
+                "maxPp": 15,
+                "pp": 15,
+                "slot": 3
+              }
+            ],
+            "slot": 0,
+            "speciesId": 3,
+            "statStages": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "types": [
+              4,
+              7
+            ]
+          },
+          {
+            "abilityId": 67,
+            "fainted": false,
+            "hp": 186,
+            "inBattleStatus": [],
+            "itemId": 0,
+            "maxHp": 186,
+            "moves": [
+              {
+                "id": 57,
+                "maxPp": 15,
+                "pp": 15,
+                "slot": 0
+              },
+              {
+                "id": 58,
+                "maxPp": 10,
+                "pp": 10,
+                "slot": 1
+              },
+              {
+                "id": 399,
+                "maxPp": 15,
+                "pp": 15,
+                "slot": 2
+              },
+              {
+                "id": 182,
+                "maxPp": 10,
+                "pp": 10,
+                "slot": 3
+              }
+            ],
+            "slot": 1,
+            "speciesId": 9,
+            "statStages": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "types": [
+              2,
+              18
+            ]
+          },
+          {
+            "abilityId": 47,
+            "fainted": false,
+            "hp": 267,
+            "inBattleStatus": [],
+            "itemId": 0,
+            "maxHp": 267,
+            "moves": [
+              {
+                "id": 34,
+                "maxPp": 15,
+                "pp": 15,
+                "slot": 0
+              },
+              {
+                "id": 89,
+                "maxPp": 10,
+                "pp": 10,
+                "slot": 1
+              },
+              {
+                "id": 242,
+                "maxPp": 15,
+                "pp": 15,
+                "slot": 2
+              },
+              {
+                "id": 174,
+                "maxPp": 10,
+                "pp": 10,
+                "slot": 3
+              }
+            ],
+            "slot": 2,
+            "speciesId": 143,
+            "statStages": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "types": [
+              0,
+              18
+            ]
+          }
+        ],
+        "side": 1,
+        "sideEffects": {
+          "lightScreen": 0,
+          "mist": 0,
+          "mudSport": 0,
+          "reflect": 0,
+          "safeguard": 0,
+          "spikes": 0,
+          "stealthRock": 0,
+          "toxicSpikes": 0,
+          "waterSport": 0
+        }
+      }
+    ],
+    "turn": 0,
+    "weather": {
+      "duration": 0,
+      "type": 0
+    }
+  },
+  "events": [
+    {
+      "description": "Dragonite 上场了（初始上场）。",
+      "details": {
+        "pokemon": "Dragonite",
+        "pokemon_ref": {
+          "pokemon_index": 1,
+          "side_index": 0
+        },
+        "reason": "initial_send_out",
+        "side": "Side A",
+        "side_index": 0
+      },
+      "timeline_index": 0,
+      "turn_index": 0
+    },
+    {
+      "description": "Blastoise 上场了（初始上场）。",
+      "details": {
+        "pokemon": "Blastoise",
+        "pokemon_ref": {
+          "pokemon_index": 1,
+          "side_index": 1
+        },
+        "reason": "initial_send_out",
+        "side": "Side B",
+        "side_index": 1
+      },
+      "timeline_index": 1,
+      "turn_index": 0
+    }
+  ]
+}

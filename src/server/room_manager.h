@@ -3,7 +3,8 @@
 #include <string>
 #include <map>
 #include <memory>
-#include <mutex>
+#include <shared_mutex>
+#include <atomic>
 #include <chrono>
 
 namespace pokemon_game
@@ -66,7 +67,8 @@ namespace pokemon_game
 
     private:
         std::map<std::string, Room> rooms_;
-        mutable std::mutex mutex_;
+        mutable std::shared_mutex mutex_;  // Changed from std::mutex to std::shared_mutex for read/write locking
+        std::atomic<int> room_count_{0};   // Atomic counter for fast heartbeat queries
         int max_rooms_;
         int room_counter_; // For generating unique room IDs
         bool is_maintaining_;
